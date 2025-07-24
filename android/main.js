@@ -3,117 +3,132 @@ import { ARButton } from 'https://solraczo.github.io/castillo1/android/libs/ARBu
 import { GLTFLoader } from 'https://solraczo.github.io/castillo1/android/libs/GLTFLoader.js';
 import { RGBELoader } from 'https://solraczo.github.io/castillo1/android/libs/RGBELoader.js';
 
-let mixerGLTF;
-let actionsGLTF = {};
-let clock = new THREE.Clock();
-let modelLoaded = false;
-const animationSpeed = 1;
-
-let model;
+let scene, camera, renderer;
+let model, mixerGLTF, hitTestSource = null, hitTestSourceRequested = false;
 let placed = false;
-let hitTestSource = null;
+const clock = new THREE.Clock();
+const animationSpeed = 1;
+let previousTouches = [];
 
-// Escena, cámara y renderizador
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
-const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.xr.enabled = true;
-renderer.setClearColor(0x000000, 0);
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.5;
-renderer.outputEncoding = THREE.sRGBEncoding;
-document.body.appendChild(renderer.domElement);
+init();
+animate();
 
-// Verificar soporte de WebXR
-if ('xr' in navigator) {
-    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
-        if (supported) {
-            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
-            arButton.classList.add('custom-ar-button');
-            document.body.appendChild(arButton);
+function init() {
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.outputEncoding = THREE.sRGBEncoding;
+    renderer.setClearColor(0x000000, 0);
+    document.body.appendChild(renderer.domElement);
 
-            renderer.xr.addEventListener('sessionend', () => {
-                hitTestSource = null;
-                placed = false;
-            });
-        } else {
-            alert('WebXR AR no es soportado en este dispositivo.');
+    document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+    const light = new THREE.PointLight(0xffffff, 0.2);
+    light.position.set(0, 0.2, 0.2);
+    scene.add(light);
+
+    new RGBELoader().load(
+        'https://solraczo.github.io/castillo1/android/models/brown_photostudio_02_2k.hdr',
+        (texture) => {
+            texture.mapping = THREE.EquirectangularReflectionMapping;
+            scene.environment = texture;
+            scene.background = null;
         }
-    }).catch((error) => {
-        console.error('Error al verificar soporte de WebXR AR:', error);
+    );
+
+    const loader = new GLTFLoader();
+    loader.load(
+        'https://solraczo.github.io/castillo1/android/models/prueba1.gltf',
+        (gltf) => {
+            model = gltf.scene;
+            model.scale.set(1, 1, 1);
+            model.visible = false;
+            scene.add(model);
+
+            mixerGLTF = new THREE.AnimationMixer(model);
+            gltf.animations.forEach((clip) => {
+                const action = mixerGLTF.clipAction(clip);
+                action.setLoop(THREE.LoopRepeat);
+                action.timeScale = animationSpeed;
+                action.play();
+            });
+        }
+    );
+
+    // Tocar una vez para colocar
+    renderer.domElement.addEventListener('touchend', (event) => {
+        if (!placed && model && model.visible) {
+            placed = true;
+            hitTestSourceRequested = false;
+            if (hitTestSource) {
+                hitTestSource.cancel();
+                hitTestSource = null;
+            }
+        }
     });
-} else {
-    alert('WebXR no está disponible en este navegador.');
+
+    // Gestos táctiles
+    renderer.domElement.addEventListener('touchstart', (e) => {
+        if (!placed || !model) return;
+        previousTouches = [...e.touches];
+    });
+
+    renderer.domElement.addEventListener('touchmove', (e) => {
+        if (!placed || !model) return;
+
+        if (e.touches.length === 1 && previousTouches.length === 1) {
+            const dx = e.touches[0].clientX - previousTouches[0].clientX;
+            model.rotation.y += dx * 0.005;
+        } else if (e.touches.length === 2 && previousTouches.length === 2) {
+            const prevDist = distance(previousTouches[0], previousTouches[1]);
+            const currDist = distance(e.touches[0], e.touches[1]);
+            const scaleChange = (currDist - prevDist) * 0.005;
+            const newScale = model.scale.x + scaleChange;
+            model.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
+
+            const moveX = (
+                (e.touches[0].clientX + e.touches[1].clientX) / 2 -
+                (previousTouches[0].clientX + previousTouches[1].clientX) / 2
+            ) * 0.001;
+            model.position.x += moveX;
+        }
+
+        previousTouches = [...e.touches];
+    });
 }
 
-// Iluminación
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const light = new THREE.PointLight(0xffffff, 0.2);
-light.position.set(0, 0.2, 0.2);
-scene.add(light);
+function animate() {
+    renderer.setAnimationLoop((timestamp, frame) => {
+        const delta = clock.getDelta();
+        if (mixerGLTF) mixerGLTF.update(delta * animationSpeed);
 
-// HDRI
-new RGBELoader().load(
-    'https://solraczo.github.io/castillo1/android/models/brown_photostudio_02_2k.hdr',
-    (texture) => {
-        texture.mapping = THREE.EquirectangularReflectionMapping;
-        scene.environment = texture;
-        scene.background = null;
-        console.log('HDRI cargado correctamente.');
-    },
-    undefined,
-    (error) => console.error('Error al cargar HDRI:', error)
-);
+        if (!placed && frame) {
+            const session = renderer.xr.getSession();
 
-// Cargar modelo GLTF
-new GLTFLoader().load(
-    'https://solraczo.github.io/castillo1/android/models/prueba1.gltf',
-    (gltf) => {
-        model = gltf.scene;
-        model.scale.set(1, 1, 1);
-        model.visible = false;
-        scene.add(model);
-
-        mixerGLTF = new THREE.AnimationMixer(model);
-        gltf.animations.forEach((clip) => {
-            const action = mixerGLTF.clipAction(clip);
-            action.setLoop(THREE.LoopRepeat);
-            action.timeScale = animationSpeed;
-            action.play();
-            actionsGLTF[clip.name] = action;
-        });
-
-        modelLoaded = true;
-        console.log('Modelo cargado con animaciones:', Object.keys(actionsGLTF));
-    },
-    (xhr) => console.log('GLTF loaded:', (xhr.loaded / xhr.total) * 100 + '%'),
-    (error) => console.error('Error al cargar modelo:', error)
-);
-
-// Loop de renderizado con hit-test
-renderer.setAnimationLoop((timestamp, frame) => {
-    const delta = clock.getDelta();
-    if (mixerGLTF) mixerGLTF.update(delta * animationSpeed);
-
-    if (frame && !placed && model) {
-        const session = renderer.xr.getSession();
-        const refSpace = renderer.xr.getReferenceSpace();
-
-        if (!hitTestSource) {
-            session.requestReferenceSpace('viewer').then((viewerSpace) => {
-                session.requestHitTestSource({ space: viewerSpace }).then((source) => {
-                    hitTestSource = source;
+            if (!hitTestSourceRequested) {
+                session.requestReferenceSpace('viewer').then((space) => {
+                    session.requestHitTestSource({ space }).then((source) => {
+                        hitTestSource = source;
+                    });
                 });
-            });
-        }
+                hitTestSourceRequested = true;
 
-        if (hitTestSource) {
-            const hitTestResults = frame.getHitTestResults(hitTestSource);
-            if (hitTestResults.length > 0) {
-                const hit = hitTestResults[0];
-                const pose = hit.getPose(refSpace);
-                if (pose) {
+                session.addEventListener('end', () => {
+                    hitTestSourceRequested = false;
+                    hitTestSource = null;
+                    placed = false;
+                });
+            }
+
+            if (hitTestSource) {
+                const referenceSpace = renderer.xr.getReferenceSpace();
+                const hitTestResults = frame.getHitTestResults(hitTestSource);
+                if (hitTestResults.length > 0 && model) {
+                    const hit = hitTestResults[0];
+                    const pose = hit.getPose(referenceSpace);
                     model.visible = true;
                     model.position.set(
                         pose.transform.position.x,
@@ -123,60 +138,11 @@ renderer.setAnimationLoop((timestamp, frame) => {
                 }
             }
         }
-    }
 
-    renderer.render(scene, camera);
-});
+        renderer.render(scene, camera);
+    });
+}
 
-// Fijar modelo al tocar por primera vez
-renderer.domElement.addEventListener('touchend', (event) => {
-    if (!placed && model && model.visible) {
-        placed = true;
-        console.log('Modelo colocado.');
-    }
-}, false);
-
-// Gestos táctiles para mover, rotar, escalar
-let isTouching = false;
-let previousTouches = [];
-
-renderer.domElement.addEventListener('touchstart', (event) => {
-    if (modelLoaded && placed) {
-        isTouching = true;
-        previousTouches = [...event.touches];
-    }
-}, false);
-
-renderer.domElement.addEventListener('touchmove', (event) => {
-    if (!isTouching || !model || !placed) return;
-
-    if (event.touches.length === 1 && previousTouches.length === 1) {
-        // Rotar
-        const deltaX = event.touches[0].clientX - previousTouches[0].clientX;
-        model.rotation.y += deltaX * 0.005;
-    } else if (event.touches.length === 2 && previousTouches.length === 2) {
-        // Escalar
-        const prevDist = Math.hypot(
-            previousTouches[0].clientX - previousTouches[1].clientX,
-            previousTouches[0].clientY - previousTouches[1].clientY
-        );
-        const currDist = Math.hypot(
-            event.touches[0].clientX - event.touches[1].clientX,
-            event.touches[0].clientY - event.touches[1].clientY
-        );
-        const scaleDelta = (currDist - prevDist) * 0.005;
-        const newScale = model.scale.x + scaleDelta;
-        model.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
-
-        // Mover en X
-        const moveDeltaX = ((event.touches[0].clientX + event.touches[1].clientX) / 2 -
-                            (previousTouches[0].clientX + previousTouches[1].clientX) / 2) * 0.001;
-        model.position.x += moveDeltaX;
-    }
-
-    previousTouches = [...event.touches];
-}, false);
-
-renderer.domElement.addEventListener('touchend', () => {
-    isTouching = false;
-}, false);
+function distance(p1, p2) {
+    return Math.hypot(p1.clientX - p2.clientX, p1.clientY - p2.clientY);
+}
