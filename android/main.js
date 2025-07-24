@@ -8,6 +8,10 @@ let actionsGLTF = {};
 let clock = new THREE.Clock();
 let modelLoaded = false;
 const animationSpeed = 1;
+let hitTestSource = null;
+let localSpace = null;
+let placed = false;
+
 
 // Escena, cámara y renderizador
 const scene = new THREE.Scene();
@@ -53,6 +57,11 @@ if ('xr' in navigator) {
     alert('WebXR no está disponible en este navegador.');
 }
 
+renderer.domElement.addEventListener('touchend', (event) => {
+    if (!placed && model) {
+        placed = true; // Fijar el modelo en la posición actual
+    }
+});
 
 // Iluminación
 const light = new THREE.PointLight(0xffffff, 0.2);
@@ -109,6 +118,34 @@ gltfLoader.load(
 renderer.setAnimationLoop((timestamp, frame) => {
     const delta = clock.getDelta();
     if (mixerGLTF) mixerGLTF.update(delta * animationSpeed);
+
+    if (frame && !placed) {
+        const referenceSpace = renderer.xr.getReferenceSpace();
+        const session = renderer.xr.getSession();
+
+        if (!hitTestSource) {
+            session.requestReferenceSpace('viewer').then((space) => {
+                session.requestHitTestSource({ space }).then((source) => {
+                    hitTestSource = source;
+                });
+            });
+            session.addEventListener('end', () => {
+                hitTestSource = null;
+                placed = false;
+            });
+        }
+
+        if (hitTestSource) {
+            const hitTestResults = frame.getHitTestResults(hitTestSource);
+            if (hitTestResults.length > 0 && model) {
+                const hit = hitTestResults[0];
+                const pose = hit.getPose(referenceSpace);
+                model.visible = true;
+                model.position.set(pose.transform.position.x, pose.transform.position.y, pose.transform.position.z);
+            }
+        }
+    }
+
     renderer.render(scene, camera);
 });
 // Variables para interacción táctil
