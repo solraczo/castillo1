@@ -57,7 +57,7 @@ class InteractiveGroup extends Group {
 
 	}
 
-	listenToXRControllerEvents( controller ) {
+
 
 		const scope = this;
 
