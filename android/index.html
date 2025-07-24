@@ -3,11 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Model Viewer</title>
-    <style>
+    <title>3D Model Viewer AR</title> <style>
         body {
             margin: 0;
             overflow: hidden;
+            /* Asegúrate de que el canvas de Three.js ocupe toda la pantalla */
+            width: 100vw;
+            height: 100vh;
         }
         /* Estilos personalizados para el botón AR */
         .custom-ar-button {
@@ -17,10 +19,16 @@
             border-radius: 5px !important; /* Redondea las esquinas */
             padding: 10px 20px !important; /* Ajusta el relleno */
             font-size: 16px !important; /* Ajusta el tamaño de la fuente */
+            /* Centrar el botón si quieres */
+            position: absolute; /* O 'fixed' si quieres que siempre esté visible */
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100; /* Asegura que esté por encima del canvas */
         }
     </style>
 </head>
 <body>
-    <script type="module" src="https://solraczo.github.io/castillo1/android/main.js"></script>
+    <script type="module" src="./main.js"></script>
 </body>
 </html>
