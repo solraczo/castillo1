@@ -14,7 +14,9 @@ let hitTestSource = null;
 let hitTestSourceInitialized = false;
 let localSpace = null;
 let viewerSpace = null;
-let modelPlaced = false; // Para saber si el modelo ya está posicionado
+// Ya no necesitamos 'modelPlaced' para el comportamiento original,
+// pero la mantendremos si quieres usarla para un futuro reposicionamiento manual.
+let modelPlaced = false;
 
 // Escena, cámara y renderizador
 const scene = new THREE.Scene();
@@ -33,20 +35,25 @@ if ('xr' in navigator) {
     navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
         if (supported) {
             // Crear el botón AR y agregar una clase personalizada
-            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] });
-            arButton.classList.add('custom-ar-button'); // Agregar una clase personalizada
+            const arButton = ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }); // Mantenemos hit-test
+            arButton.classList.add('custom-ar-button');
             document.body.appendChild(arButton);
 
             // Detectar el inicio de la sesión de AR
             renderer.xr.addEventListener('sessionstart', (event) => {
                 const session = event.session;
 
-                // Crear un espacio local para el contenido
+                // Restablecer el comportamiento original: hacer el modelo visible al iniciar la sesión
+                if (model) {
+                    model.visible = true; // HACER VISIBLE EL MODELO AQUÍ
+                    // Opcionalmente, puedes darle una posición inicial si no quieres que sea (0,0,0)
+                    // model.position.set(0, -0.5, -1); // Ejemplo: un poco más abajo y enfrente de la cámara
+                }
+
+                // Las siguientes líneas son para el hit-test, las mantenemos para futuras funcionalidades
                 session.requestReferenceSpace('local').then((space) => {
                     localSpace = space;
                 });
-
-                // Crear un espacio para el visor (cámara)
                 session.requestReferenceSpace('viewer').then((space) => {
                     viewerSpace = space;
                     session.requestHitTestSource({ space: viewerSpace }).then((source) => {
@@ -60,21 +67,16 @@ if ('xr' in navigator) {
                     console.error('Error requesting viewer space:', e);
                 });
 
-                // Agregar un listener para taps en la pantalla (simula clics en AR)
+                // Mantendremos el listener 'select' por si quieres usar el hit-test para algo más tarde
                 session.addEventListener('select', onSelect);
 
-                // Ocultar el modelo al iniciar la sesión si ya estaba visible de alguna manera
-                if (model) {
-                    model.visible = false;
-                    modelPlaced = false; // Resetear el estado de colocado
-                }
+                console.log('Sesión AR iniciada. Modelo debería ser visible.');
             });
 
             // Detectar el final de la sesión de AR
             renderer.xr.addEventListener('sessionend', () => {
                 if (model) {
-                    model.visible = false;
-                    modelPlaced = false; // Resetear el estado de colocado
+                    model.visible = false; // Ocultar el modelo al salir de AR
                 }
                 hitTestSource = null;
                 hitTestSourceInitialized = false;
@@ -90,7 +92,7 @@ if ('xr' in navigator) {
     alert('WebXR no está disponible en este navegador.');
 }
 
-// Iluminación
+// Iluminación (sin cambios)
 const light = new THREE.PointLight(0xffffff, 0.2);
 light.position.set(0, 0.2, 0.2);
 scene.add(light);
@@ -98,7 +100,7 @@ scene.add(light);
 const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
 scene.add(ambientLight);
 
-// Cargar HDRI como entorno
+// Cargar HDRI (sin cambios)
 const rgbeLoader = new RGBELoader();
 rgbeLoader.load(
     'https://solraczo.github.io/castillo1/android/models/brown_photostudio_02_2k.hdr',
@@ -112,7 +114,7 @@ rgbeLoader.load(
     (error) => console.error('Error al cargar el HDRI:', error)
 );
 
-// Cargar el modelo GLTF y activar todas sus animaciones en loop
+// Cargar el modelo GLTF y activar animaciones (con un ajuste inicial de visibilidad)
 const gltfLoader = new GLTFLoader();
 let model;
 gltfLoader.load(
@@ -120,8 +122,8 @@ gltfLoader.load(
     (gltf) => {
         model = gltf.scene;
         model.scale.set(1, 1, 1);
-        model.position.set(0, 0, 0); // Posición inicial (antes de ser colocado en AR)
-        model.visible = false; // Ocultar el modelo inicialmente hasta que sea colocado en AR
+        model.position.set(0, 0, 0); // Posición inicial (puedes ajustar esta para que aparezca en un lugar razonable)
+        model.visible = false; // El modelo se oculta inicialmente aquí. Se hará visible en 'sessionstart'.
         scene.add(model);
 
         mixerGLTF = new THREE.AnimationMixer(model);
@@ -141,46 +143,36 @@ gltfLoader.load(
     (error) => console.error('Error al cargar el modelo GLTF:', error)
 );
 
-// --- Funcionalidades para interactuar en AR ---
+// --- Funcionalidades para interactuar en AR (manteniendo el hit-test por si lo necesitas) ---
 
 /**
  * Función que se ejecuta cuando el usuario realiza un "select" (tap/clic) en la sesión AR.
- * Aquí es donde intentaremos colocar el modelo.
+ * Puedes usar esta función para reposicionar el modelo o añadir otros elementos.
  */
 function onSelect() {
-    if (renderer.xr.isPresenting && modelLoaded && hitTestSourceInitialized && hitTestSource && !modelPlaced) {
-        // Obtenemos los resultados del hit-test para el frame actual
+    // Si el modelo ya es visible por defecto al entrar en AR,
+    // puedes usar esta función para, por ejemplo, moverlo al punto de hit-test.
+    if (renderer.xr.isPresenting && modelLoaded && hitTestSourceInitialized && hitTestSource) {
         const frame = renderer.xr.getFrame();
         const hitTestResults = frame.getHitTestResults(hitTestSource);
 
         if (hitTestResults.length > 0) {
-            // Tomamos el primer resultado del hit-test
             const hit = hitTestResults[0];
-
-            // Obtenemos la matriz de transformación del resultado del hit-test
             const pose = hit.getPose(localSpace);
 
             if (model) {
-                // Posicionamos el modelo en la ubicación del hit-test
+                // Aquí, en lugar de hacerlo visible, lo reposicionas.
                 model.position.copy(pose.transform.position);
                 model.quaternion.copy(pose.transform.orientation);
-                model.visible = true; // Hacer el modelo visible
-                modelPlaced = true; // Marcar que el modelo ya ha sido colocado
-                console.log('Modelo colocado en AR.');
+                console.log('Modelo reposicionado a través de hit-test.');
             }
         } else {
-            console.log('No se encontraron resultados de hit-test.');
+            console.log('No se encontraron resultados de hit-test para reposicionar.');
         }
-    } else if (modelPlaced) {
-        console.log('Modelo ya colocado. Toca para reposicionarlo si es necesario.');
-        // Puedes agregar lógica aquí para reposicionar el modelo si se toca de nuevo
-        // Por ahora, solo permitimos un solo posicionamiento inicial.
-        // Para reposicionar, podrías establecer modelPlaced = false y model.visible = false
-        // y permitir que el siguiente tap lo mueva.
     }
 }
 
-// Animar cada frame
+// Animar cada frame (sin cambios)
 renderer.setAnimationLoop((timestamp, frame) => {
     const delta = clock.getDelta();
     if (mixerGLTF) mixerGLTF.update(delta * animationSpeed);
