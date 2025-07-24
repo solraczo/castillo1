@@ -1,7 +1,7 @@
-import * as THREE from 'https://solraczo.github.io/solarandroid/libs/three.module.js';
-import { ARButton } from 'https://solraczo.github.io/solarandroid/libs/ARButton.js';
-import { GLTFLoader } from 'https://solraczo.github.io/solarandroid/libs/GLTFLoader.js';
-import { RGBELoader } from 'https://solraczo.github.io/solarandroid/libs/RGBELoader.js';
+import * as THREE from 'https://solraczo.github.io/castillo1/libs/three.module.js';
+import { ARButton } from 'https://solraczo.github.io/castillo1/libs/ARButton.js';
+import { GLTFLoader } from 'https://solraczo.github.io/castillo1/libs/GLTFLoader.js';
+import { RGBELoader } from 'https://solraczo.github.io/castillo1/libs/RGBELoader.js';
 
 let mixerGLTF;
 let actionsGLTF = {};
@@ -65,7 +65,7 @@ scene.add(ambientLight);
 // Cargar HDRI como entorno
 const rgbeLoader = new RGBELoader();
 rgbeLoader.load(
-    'https://solraczo.github.io/solarandroid/models/brown_photostudio_02_2k.hdr',
+    'https://solraczo.github.io/castillo1/models/brown_photostudio_02_2k.hdr',
     (texture) => {
         texture.mapping = THREE.EquirectangularReflectionMapping;
         scene.environment = texture;
@@ -80,10 +80,10 @@ rgbeLoader.load(
 const gltfLoader = new GLTFLoader();
 let model;
 gltfLoader.load(
-    'https://solraczo.github.io/ARedadsolar/android/models/edadsolar_25.gltf',
+    'https://solraczo.github.io/castillo1/android/models/prueba1.gltf',
     (gltf) => {
         model = gltf.scene;
-        model.scale.set(0.5, 0.5, 0.5);
+        model.scale.set(1, 1, 1);
         model.position.set(0, 0, 0);
         model.visible = false; // Ocultar el modelo inicialmente
         scene.add(model);
