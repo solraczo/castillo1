@@ -2,22 +2,25 @@ import * as THREE from 'https://solraczo.github.io/castillo1/android/libs/three.
 import { ARButton } from 'https://solraczo.github.io/castillo1/android/libs/ARButton.js';
 import { GLTFLoader } from 'https://solraczo.github.io/castillo1/android/libs/GLTFLoader.js';
 import { RGBELoader } from 'https://solraczo.github.io/castillo1/android/libs/RGBELoader.js';
-import { InteractiveGroup } from 'https://solraczo.github.io/castillo1/android/libs/InteractiveGroup.js'; // Ruta local donde pongas el archivo
+import { InteractiveGroup } from 'https://solraczo.github.io/castillo1/android/libs/InteractiveGroup.js';
 
 let scene, camera, renderer;
 let model, mixerGLTF, hitTestSource = null, hitTestSourceRequested = false;
 let placed = false;
 const clock = new THREE.Clock();
 const animationSpeed = 1;
-let previousTouches = [];
 
 const interactiveGroup = new InteractiveGroup();
+let lastPointer = null;
+let isTouching = false;
+let previousDistance = null;
 
 init();
 animate();
 
 function init() {
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x222222);
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -53,8 +56,29 @@ function init() {
             model.scale.set(1, 1, 1);
             model.visible = false;
 
-            model.addEventListener('click', () => {
-                console.log('Modelo clickeado');
+            model.addEventListener('pointerdown', (event) => {
+                isTouching = true;
+                lastPointer = event.data.clone();
+                previousDistance = null;
+            });
+
+            model.addEventListener('pointermove', (event) => {
+                if (!isTouching || !lastPointer) return;
+
+                const dx = event.data.x - lastPointer.x;
+                const dy = event.data.y - lastPointer.y;
+
+                model.rotation.y += dx * 5.0;
+                model.position.x += dx * 2.0;
+                model.position.z += dy * 2.0;
+
+                lastPointer = event.data.clone();
+            });
+
+            model.addEventListener('pointerup', () => {
+                isTouching = false;
+                lastPointer = null;
+                previousDistance = null;
             });
 
             interactiveGroup.add(model);
@@ -69,7 +93,7 @@ function init() {
         }
     );
 
-    renderer.domElement.addEventListener('touchend', (event) => {
+    renderer.domElement.addEventListener('touchend', () => {
         if (!placed && model && model.visible) {
             placed = true;
             hitTestSourceRequested = false;
@@ -80,32 +104,17 @@ function init() {
         }
     });
 
-    renderer.domElement.addEventListener('touchstart', (e) => {
-        if (!placed || !model) return;
-        previousTouches = [...e.touches];
-    });
-
     renderer.domElement.addEventListener('touchmove', (e) => {
         if (!placed || !model) return;
-
-        if (e.touches.length === 1 && previousTouches.length === 1) {
-            const dx = e.touches[0].clientX - previousTouches[0].clientX;
-            model.rotation.y += dx * 0.005;
-        } else if (e.touches.length === 2 && previousTouches.length === 2) {
-            const prevDist = distance(previousTouches[0], previousTouches[1]);
-            const currDist = distance(e.touches[0], e.touches[1]);
-            const scaleChange = (currDist - prevDist) * 0.005;
-            const newScale = model.scale.x + scaleChange;
-            model.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
-
-            const moveX = (
-                (e.touches[0].clientX + e.touches[1].clientX) / 2 -
-                (previousTouches[0].clientX + previousTouches[1].clientX) / 2
-            ) * 0.001;
-            model.position.x += moveX;
+        if (e.touches.length === 2) {
+            const dist = distance(e.touches[0], e.touches[1]);
+            if (previousDistance !== null) {
+                const scaleChange = (dist - previousDistance) * 0.01;
+                const newScale = model.scale.x + scaleChange;
+                model.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
+            }
+            previousDistance = dist;
         }
-
-        previousTouches = [...e.touches];
     });
 }
 
