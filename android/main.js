@@ -2,6 +2,7 @@ import * as THREE from 'https://solraczo.github.io/castillo1/android/libs/three.
 import { ARButton } from 'https://solraczo.github.io/castillo1/android/libs/ARButton.js';
 import { GLTFLoader } from 'https://solraczo.github.io/castillo1/android/libs/GLTFLoader.js';
 import { RGBELoader } from 'https://solraczo.github.io/castillo1/android/libs/RGBELoader.js';
+import { InteractiveGroup } from './InteractiveGroup.js'; // Ruta local donde pongas el archivo
 
 let scene, camera, renderer;
 let model, mixerGLTF, hitTestSource = null, hitTestSourceRequested = false;
@@ -9,6 +10,8 @@ let placed = false;
 const clock = new THREE.Clock();
 const animationSpeed = 1;
 let previousTouches = [];
+
+const interactiveGroup = new InteractiveGroup();
 
 init();
 animate();
@@ -39,6 +42,9 @@ function init() {
         }
     );
 
+    scene.add(interactiveGroup);
+    interactiveGroup.listenToPointerEvents(renderer, camera);
+
     const loader = new GLTFLoader();
     loader.load(
         'https://solraczo.github.io/castillo1/android/models/prueba1.gltf',
@@ -46,7 +52,12 @@ function init() {
             model = gltf.scene;
             model.scale.set(1, 1, 1);
             model.visible = false;
-            scene.add(model);
+
+            model.addEventListener('click', () => {
+                console.log('Modelo clickeado');
+            });
+
+            interactiveGroup.add(model);
 
             mixerGLTF = new THREE.AnimationMixer(model);
             gltf.animations.forEach((clip) => {
@@ -58,7 +69,6 @@ function init() {
         }
     );
 
-    // Tocar una vez para colocar
     renderer.domElement.addEventListener('touchend', (event) => {
         if (!placed && model && model.visible) {
             placed = true;
@@ -70,7 +80,6 @@ function init() {
         }
     });
 
-    // Gestos táctiles
     renderer.domElement.addEventListener('touchstart', (e) => {
         if (!placed || !model) return;
         previousTouches = [...e.touches];
