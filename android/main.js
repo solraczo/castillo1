@@ -2,7 +2,7 @@ import * as THREE from 'https://solraczo.github.io/castillo1/android/libs/three.
 import { ARButton } from 'https://solraczo.github.io/castillo1/android/libs/ARButton.js';
 import { GLTFLoader } from 'https://solraczo.github.io/castillo1/android/libs/GLTFLoader.js';
 import { RGBELoader } from 'https://solraczo.github.io/castillo1/android/libs/RGBELoader.js';
-import { InteractiveGroup } from './InteractiveGroup.js'; // Ruta local donde pongas el archivo
+import { InteractiveGroup } from 'https://solraczo.github.io/castillo1/android/libs/InteractiveGroup.js'; // Ruta local donde pongas el archivo
 
 let scene, camera, renderer;
 let model, mixerGLTF, hitTestSource = null, hitTestSourceRequested = false;
