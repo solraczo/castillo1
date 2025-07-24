@@ -111,3 +111,48 @@ renderer.setAnimationLoop((timestamp, frame) => {
     if (mixerGLTF) mixerGLTF.update(delta * animationSpeed);
     renderer.render(scene, camera);
 });
+// Variables para interacción táctil
+let isTouching = false;
+let previousTouches = [];
+
+renderer.domElement.addEventListener('touchstart', (event) => {
+    if (modelLoaded) {
+        isTouching = true;
+        previousTouches = [...event.touches];
+    }
+}, false);
+
+renderer.domElement.addEventListener('touchmove', (event) => {
+    if (!isTouching || !model) return;
+
+    if (event.touches.length === 1 && previousTouches.length === 1) {
+        // ROTAR con un dedo
+        const deltaX = event.touches[0].clientX - previousTouches[0].clientX;
+        model.rotation.y += deltaX * 0.005;
+    } else if (event.touches.length === 2 && previousTouches.length === 2) {
+        // ESCALAR y MOVER con dos dedos
+        const prevDist = Math.hypot(
+            previousTouches[0].clientX - previousTouches[1].clientX,
+            previousTouches[0].clientY - previousTouches[1].clientY
+        );
+        const currDist = Math.hypot(
+            event.touches[0].clientX - event.touches[1].clientX,
+            event.touches[0].clientY - event.touches[1].clientY
+        );
+
+        const scaleDelta = (currDist - prevDist) * 0.005;
+        const newScale = model.scale.x + scaleDelta;
+        model.scale.setScalar(Math.max(0.1, Math.min(5, newScale)));
+
+        // MOVER en eje X (arrastre horizontal)
+        const moveDeltaX = ((event.touches[0].clientX + event.touches[1].clientX) / 2 - 
+                            (previousTouches[0].clientX + previousTouches[1].clientX) / 2) * 0.001;
+        model.position.x += moveDeltaX;
+    }
+
+    previousTouches = [...event.touches];
+}, false);
+
+renderer.domElement.addEventListener('touchend', () => {
+    isTouching = false;
+}, false);
